@@ -1,5 +1,5 @@
 ---
-description: Verify implementation compliance against the feature specification and update spec.md to reflect validated deviations.
+description: Validate delivered code against normative artifacts (spec, plan, data-model, contracts) and update spec.md to reflect intentional implementation deviations.
 scripts:
   sh: scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks
   ps: scripts/powershell/check-prerequisites.ps1 -Json -RequireTasks -IncludeTasks
@@ -19,11 +19,15 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 ## Goal
 
-Validate that the delivered implementation matches the feature specification (`spec.md`) and supporting normative artifacts (`plan.md`, `data-model.md`, `contracts/`). For each discrepancy, determine whether it represents a spec gap (update spec.md) or an implementation gap (flag for remediation). This command runs AFTER `/speckit.implement` has completed the implementation tasks.
+Validate delivered code against normative artifacts (`spec.md`, `plan.md`, `data-model.md`, `contracts/`) and update spec.md to reflect intentional implementation deviations. This command MUST run only after `/speckit.implement` has completed implementation tasks.
 
 ## Operating Constraints
 
-**Incremental Spec Updates**: When the implementation intentionally deviates from the original spec and the user confirms the deviation is correct, update `spec.md` to reflect the as-built state. Use atomic writes after each accepted change.
+**Interactive Discrepancy Resolution**: For each mismatch found, ask the user whether it's a spec gap (update spec) or implementation gap (flag for remediation). Follow the one-question-at-a-time pattern from `/speckit.clarify`.
+
+**Atomic Writes**: Update spec.md incrementally after each confirmed deviation, preserving formatting and existing content.
+
+**Remediation Handoff**: If implementation gaps are identified, recommend running `/speckit.implement` to address them.
 
 **Constitution Authority**: The project constitution (`/memory/constitution.md`) remains **non-negotiable**. If an implementation deviation violates a constitution principle, it MUST be flagged as an implementation gap—never accepted as a spec update.
 
@@ -44,57 +48,80 @@ For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot
 
 ### 2. Load Normative Artifacts
 
-Load the specification and supporting documents (progressive disclosure—minimal context first):
+Load minimal necessary context from each artifact:
 
 **From spec.md:**
 
 - Functional Requirements (FR-XXX)
+- Non-Functional Requirements
 - User Stories with acceptance scenarios
-- Success Criteria (SC-XXX)
+- Data Requirements (DR-XXX)
 - Edge Cases
-- Key Entities (if present)
+- Technical Constraints
 
-**From plan.md (if exists):**
+**From plan.md:**
 
-- Tech stack and architecture decisions
-- File structure and component organization
-- Phase breakdown
+- Architecture/stack choices
+- File structure expectations
+- Phases and implementation approach
+- Component responsibilities
 
 **From data-model.md (if exists):**
 
-- Entities with fields, types, relationships
-- Constraints and validation rules
+- Entity definitions and attributes
+- Relationships and constraints
+- Type definitions
 
 **From contracts/ (if exists):**
 
-- API endpoint definitions (OpenAPI, GraphQL, etc.)
+- API endpoint specifications
 - Request/response schemas
+- Error codes and handling
 
 **From constitution (if exists):**
 
 - Load `/memory/constitution.md` for principle validation
 
-### 3. Analyze Implementation
+**From tasks.md:**
 
-Examine the codebase to build an implementation inventory:
+- Task IDs and descriptions
+- Completion status ([X] vs [ ])
+- File paths referenced
+- Phase grouping
 
-- **Implemented files**: Identify source files created or modified during implementation
-- **Implemented features**: Map code to functional requirements by:
-  - Searching for FR-XXX references in comments/docstrings
-  - Matching function/class names to requirement keywords
-  - Tracing task completion markers in tasks.md to corresponding files
-- **API endpoints**: Extract actual endpoint definitions and compare to contracts
-- **Data models**: Extract entity implementations and compare to data-model.md
-- **Tests**: Identify test files and map to acceptance scenarios
+### 3. Discover Implemented Code
+
+Scan the workspace to identify implemented artifacts:
+
+**File Discovery:**
+
+- Use plan.md's file structure as the primary guide for expected files
+- Scan directories mentioned in tasks.md for actual implementation
+- Identify source files, test files, and configuration files
+
+**Code Analysis:**
+
+- Extract exported functions, classes, types, and interfaces
+- Identify API endpoints and routes
+- Parse test files for test cases and coverage patterns
+- Note error handling patterns implemented
 
 ### 4. Build Traceability Matrix
 
-Create an internal mapping (do not output raw mapping unless explicitly requested):
+Create a mapping between requirements and implementation:
 
-| Requirement | Task(s) | Implemented File(s) | Status |
-|-------------|---------|---------------------|--------|
-| FR-001      | T-001   | src/auth/login.py   | ✓ Covered |
-| FR-002      | T-003   | (none found)        | ✗ Missing |
+| Requirement | Task(s) | File(s) | Status | Notes |
+|-------------|---------|---------|--------|-------|
+| FR-001 | T003, T005 | oee-display.tsx | ✓ Implemented | |
+| FR-002 | T004 | oee.ts | ✓ Implemented | |
+| FR-003 | T003 | oee-display.tsx | ? Partial | Missing loading state |
+
+**Status Categories:**
+
+- ✓ **Implemented**: Code fully satisfies the requirement
+- ? **Partial**: Code exists but may not fully satisfy requirement
+- ✗ **Missing**: No implementation found for this requirement
+- Δ **Deviation**: Implementation differs from specification
 
 Track coverage for:
 
@@ -103,170 +130,226 @@ Track coverage for:
 - Key Entities → Data Model → Implementation
 - API Contracts → Endpoint Implementations
 
-### 5. Detect Discrepancies
+### 5. Compliance Analysis
 
-Compare normative artifacts against implementation. Categorize findings:
+Perform systematic verification across all normative dimensions:
 
-#### A. Implementation Gaps (code missing or incomplete)
+#### A. Functional Requirement Verification
 
-- Requirements with no implementing code found
-- Acceptance scenarios without corresponding test coverage
-- API endpoints defined in contracts but not implemented
-- Entities missing required fields or relationships
+For each FR-XXX in spec.md:
 
-#### B. Spec Gaps (spec doesn't reflect intentional implementation decisions)
+- Locate implementing code in expected files
+- Verify behavior matches requirement description
+- Check edge case handling
+- Confirm test coverage exists
 
-- Implemented features not described in spec
-- API endpoints added beyond contract scope
-- Data model fields added for technical reasons
-- Behavior changes made during implementation
+#### B. Data Model Verification (if data-model.md exists)
 
-#### C. Constitution Violations
+- Compare entity definitions against implemented types/schemas
+- Verify attribute names, types, and constraints match
+- Check relationship implementations
 
-- Implementation patterns conflicting with MUST principles
-- Security or quality attributes below mandated thresholds
-- Architectural decisions violating stated constraints
+#### C. Contract Verification (if contracts/ exists)
 
-#### D. Contract Mismatches
+- Verify API endpoints match contract specifications
+- Check request/response schema compliance
+- Confirm error handling matches contract
 
-- Endpoint signatures differing from OpenAPI/GraphQL definitions
-- Request/response shapes not matching schemas
-- Missing or extra endpoints
+#### D. Non-Functional Verification
 
-### 6. Generate Verification Report
+- Performance: Check for implementation of specified targets
+- Error Handling: Verify error states match specification
+- Accessibility: Check for required accessibility implementations
+
+#### E. Test Coverage Verification
+
+- Map test files to requirements
+- Identify requirements without corresponding tests
+- Check acceptance scenario coverage
+
+### 6. Discrepancy Classification
+
+Classify each discrepancy found:
+
+| Type | Description | Resolution Path |
+|------|-------------|------------------|
+| **Spec Gap** | Implementation is correct but spec is incomplete/outdated | Update spec.md |
+| **Implementation Gap** | Spec is correct but implementation is missing/incomplete | Run `/speckit.implement` |
+| **Design Deviation** | Intentional change from spec requiring documentation | Update spec.md with rationale |
+| **Bug** | Implementation error that violates specification | Flag for fix |
+
+### 7. Generate Verification Report
 
 Output a structured Markdown report:
 
 ```markdown
-## Verification Report: [FEATURE NAME]
+## Verification Report
 
-### Summary
+**Feature**: [Feature name from spec.md]
+**Verification Date**: YYYY-MM-DD
+**Spec Path**: [FEATURE_DIR]/spec.md
 
-| Metric | Value |
-|--------|-------|
-| Functional Requirements | X/Y covered (Z%) |
-| User Stories | X/Y implemented |
-| API Endpoints | X/Y compliant |
-| Data Model Entities | X/Y match |
-| Constitution Violations | N |
+### Coverage Summary
 
-### Requirement Coverage
+| Category | Total | Verified | Partial | Missing | Coverage |
+|----------|-------|----------|---------|---------|----------|
+| Functional Requirements | 11 | 9 | 1 | 1 | 82% |
+| Data Requirements | 8 | 8 | 0 | 0 | 100% |
+| User Stories | 1 | 1 | 0 | 0 | 100% |
+| Edge Cases | 5 | 3 | 1 | 1 | 60% |
+| **Overall** | 25 | 21 | 2 | 2 | **84%** |
 
-| Req ID | Description | Status | Evidence |
-|--------|-------------|--------|----------|
-| FR-001 | [requirement text] | ✓ PASS | src/path/file.py |
-| FR-002 | [requirement text] | ✗ MISSING | No implementation found |
-| FR-003 | [requirement text] | ⚠ PARTIAL | Implemented but missing edge case handling |
+### Traceability Matrix
 
-### Discrepancies Found
+| Requirement | Status | Task(s) | File(s) |
+|-------------|--------|---------|----------|
+| FR-001 | ✓ | T003 | oee-display.tsx |
+| FR-002 | ✓ | T004 | oee.ts |
+| ... | ... | ... | ... |
 
-#### Implementation Gaps (require code changes)
+### Spec Updates Applied
 
-| ID | Severity | Description | Recommendation |
-|----|----------|-------------|----------------|
-| IG-001 | HIGH | FR-002 has no implementing code | Implement in src/... |
+1. FR-003: Documented performance approach via Next.js defaults
+2. FR-007: Updated timestamp format specification
 
-#### Spec Gaps (spec may need update)
+### Implementation Gaps (Requires `/speckit.implement`)
 
-| ID | Description | Implementation | Suggested Spec Update |
-|----|-------------|----------------|----------------------|
-| SG-001 | Extra validation added | src/validators.py | Add FR-XXX for input sanitization |
+1. FR-005: Missing "No Data Available" timeout message
+2. Edge Case 4: Non-production hours handling not implemented
 
-#### Constitution Violations (must be fixed in code)
+### Deferred Items
 
-| ID | Principle | Violation | Required Fix |
-|----|-----------|-----------|--------------|
-| CV-001 | Security-first | API lacks authentication | Add auth middleware |
+1. Edge Case 5: Component data missing handling (marked Phase 2 in spec)
+
+### Verification Metrics
+
+- **Requirements Verified**: 21/25 (84%)
+- **Spec Updates Applied**: 2
+- **Implementation Gaps Found**: 2
+- **Deferred Items**: 1
 ```
 
-### 7. Interactive Discrepancy Resolution
+### 8. Interactive Discrepancy Resolution
 
-For each **Spec Gap** (one at a time, maximum 10 per session):
+For each discrepancy (maximum 10 total), present ONE at a time:
 
-1. Present the discrepancy with context:
-   - What the spec says (or doesn't say)
-   - What the implementation does
-   - Why this might be intentional (if discernible)
-
-2. Ask the user:
-   > "The implementation includes [feature/behavior] not described in the spec.
-   > **Options:**
-   > - **A**: Update spec to document this (it's intentional)
-   > - **B**: Flag as implementation gap (it should be removed/changed)
-   > - **Skip**: Defer decision for now
-   >
-   > Which would you like?"
-
-3. If user chooses **A** (update spec):
-   - Determine the appropriate spec section (Functional Requirements, Edge Cases, Key Entities, etc.)
-   - Draft a concise addition (e.g., new FR-XXX or clarification bullet)
-   - Present the proposed change for confirmation
-   - On confirmation, apply the change to spec.md immediately (atomic write)
-
-4. If user chooses **B** (implementation gap):
-   - Add to the Implementation Gaps list with recommended fix
-
-5. Continue until all spec gaps are resolved or user says "done"/"skip all"
-
-### 8. Update Spec File (when changes accepted)
-
-For each accepted spec update:
-
-1. Ensure a `## Verification Notes` section exists (create after Success Criteria if missing)
-2. Under it, create (if not present) a `### Session YYYY-MM-DD` subheading for today
-3. Append a bullet: `- Verified: [brief description of what was confirmed/added]`
-4. Apply the actual content change to the appropriate section:
-   - New requirement → Add FR-XXX to Functional Requirements
-   - New entity field → Update Key Entities
-   - Behavior clarification → Add to Edge Cases or update User Story
-   - API addition → Note in relevant section
-5. Save spec.md after each integration (atomic overwrite)
-6. Preserve formatting: do not reorder unrelated sections
-
-### 9. Validation Pass
-
-After all updates:
-
-- Verify no duplicate requirements introduced
-- Confirm FR-XXX numbering is sequential
-- Check that Verification Notes session contains exactly one bullet per accepted change
-- Validate Markdown structure remains intact
-
-### 10. Final Report
-
-Output completion summary:
+**Format:**
 
 ```markdown
-## Verification Complete
+## Discrepancy 1 of N
 
-**Spec Updates Applied**: N changes to spec.md
-**Implementation Gaps Identified**: M issues requiring code changes
-**Constitution Violations**: P issues (must fix before release)
+**Requirement**: FR-003 - System MUST render the OEE value visible within 1 second of page load
 
-### Changes Made to spec.md
-- Added FR-007: Input sanitization for user fields
-- Updated Edge Cases: Added rate limiting behavior
+**Expected (Spec)**: OEE value visible within 1 second of page load
 
-### Remaining Action Items
-1. [HIGH] Implement FR-002 (user notification system)
-2. [CRITICAL] Add authentication to /api/admin endpoints (constitution violation)
+**Found (Implementation)**: No explicit performance optimization or loading state implemented
 
-### Suggested Next Steps
-- Run `/speckit.implement` to address implementation gaps
-- Review and merge updated spec.md
-- Re-run `/speckit.verify` after fixes to confirm compliance
+**Location**: components/dashboard/oee-display.tsx
+
+**Question**: How should this discrepancy be resolved?
+
+**Recommended:** Option A - This is a spec gap; the implementation meets the requirement through Next.js default performance
+
+| Option | Description |
+|--------|-------------|
+| A | Spec Gap: Implementation is acceptable, update spec to document approach |
+| B | Implementation Gap: Add explicit performance optimization (flag for `/speckit.implement`) |
+| C | Design Deviation: Document intentional deviation with rationale |
+| D | Skip: Do not address this discrepancy now |
+
+Reply with option letter (A, B, C, D) or accept recommendation by saying "yes".
 ```
 
-## Behavior Rules
+**After User Response:**
 
-- If no discrepancies found, output: "✓ Implementation fully complies with specification. No updates needed."
-- If spec.md is missing, instruct user to run `/speckit.specify` first
-- If tasks.md shows incomplete tasks, warn user and ask whether to proceed with partial verification
-- Never accept a spec update that would violate constitution principles
-- Respect user termination signals ("done", "stop", "skip all")
-- Maximum 10 interactive resolution questions per session
-- For implementation gaps, always provide actionable recommendations
+- **Option A (Spec Gap)**: Queue spec update for `## Verification Notes` section
+- **Option B (Implementation Gap)**: Add to remediation list for `/speckit.implement`
+- **Option C (Design Deviation)**: Queue spec update with user-provided rationale
+- **Option D (Skip)**: Mark as deferred, continue to next discrepancy
 
-## Context
+### 9. Spec Update Phase
 
-{ARGS}
+For each confirmed spec update (Options A or C):
+
+**Ensure `## Verification Notes` Section Exists:**
+
+- Create it after `## Clarifications` if not present
+- Add `### Verification YYYY-MM-DD` subheading for today's session
+
+**Append Verification Entry:**
+
+```markdown
+- **FR-XXX**: [Original requirement text]
+  - **Implementation**: [Description of actual implementation]
+  - **Resolution**: [Spec Gap | Design Deviation]
+  - **Rationale**: [Why implementation is acceptable]
+```
+
+**Atomic Write After Each Entry:**
+
+- Save spec.md immediately after each update
+- Preserve existing formatting and content
+
+### 10. Provide Next Actions
+
+Based on verification results:
+
+**If Implementation Gaps Exist:**
+
+```markdown
+### Recommended Next Steps
+
+1. Run `/speckit.implement` to address the N identified implementation gaps
+2. After implementation, run `/speckit.verify` again to confirm compliance
+```
+
+**If All Requirements Verified:**
+
+```markdown
+### Verification Complete ✓
+
+All requirements have been verified against implementation.
+- Spec updated with N verification notes
+- Feature is ready for review/release
+
+Suggested: Run `/speckit.checklist` to confirm all quality gates are met.
+```
+
+**If Critical Gaps Exist:**
+
+```markdown
+### Critical Issues Found
+
+The following critical gaps must be addressed before proceeding:
+1. [Critical gap description]
+
+Run `/speckit.implement` with focus on critical items first.
+```
+
+## Operating Principles
+
+### Verification Philosophy
+
+- **Implementation as Source of Truth**: When implementation intentionally deviates from spec, the spec should be updated to reflect reality
+- **Traceability**: Every requirement should map to specific code artifacts
+- **Incremental Updates**: Update spec immediately after each confirmed change
+
+### Interaction Guidelines
+
+- **One Discrepancy at a Time**: Never present multiple discrepancies simultaneously
+- **Provide Recommendations**: Always suggest the most appropriate resolution
+- **Respect User Decisions**: Accept user's classification without excessive questioning
+- **Early Termination**: Allow user to stop with "done", "stop", or "proceed"
+
+### Context Efficiency
+
+- **Progressive Loading**: Load code context only as needed for each discrepancy
+- **Token-Efficient Output**: Summarize large code blocks rather than dumping full content
+- **Deterministic Results**: Rerunning without changes should produce consistent findings
+
+### Integrity Rules
+
+- **NEVER fabricate implementation details**: Only report what exists in code
+- **NEVER modify implementation code**: This command only updates spec.md
+- **NEVER skip required validations**: All FR-XXX must be checked
+- **NEVER hallucinate coverage**: If code doesn't exist, report it missing
